@@ -2,9 +2,14 @@ package com.sam_chordas.android.stockhawk.service;
 
 import android.content.Context;
 import android.os.AsyncTask;
+import android.text.format.DateFormat;
 import android.util.Log;
 
 import com.squareup.okhttp.OkHttpClient;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -12,6 +17,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Date;
 
 /**
  * Created by sam_chordas on 9/30/15.
@@ -19,14 +26,25 @@ import java.net.URL;
  * and is used for the initialization and adding task as well.
  */
 public class StockHistoricalTask extends AsyncTask<String, Void, Boolean>{
+  private final String symbol;
   private String LOG_TAG = StockHistoricalTask.class.getSimpleName();
 
   private OkHttpClient client = new OkHttpClient();
   private Context mContext;
   private StringBuilder mStoredSymbols = new StringBuilder();
   private boolean isUpdate;
+  public static int N_DAYS = 15;
 
-  public StockHistoricalTask(){}
+  private StockDetailsListener listener;
+  private ArrayList<String> data;
+  public interface StockDetailsListener{
+    void onDataRetrieved(ArrayList<String> data);
+  }
+
+  public StockHistoricalTask(String symbol, StockDetailsListener stockDetailsListener){
+    this.symbol = symbol;
+    this.listener = stockDetailsListener;
+  }
 
   @Override
   protected Boolean doInBackground(String... params) {
@@ -41,7 +59,22 @@ public class StockHistoricalTask extends AsyncTask<String, Void, Boolean>{
       // Possible parameters are avaiable at OWM's forecast API page, at
       // http://openweathermap.org/API#forecast
 
-      String url = "https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.historicaldata%20where%20symbol%20=%20%22YHOO%22%20and%20startDate%20=%20%222009-09-11%22%20and%20endDate%20=%20%222010-03-10%22&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
+      Date today = new Date();
+      Date firstDay = new Date(System.currentTimeMillis()-N_DAYS*24*60*60*1000);
+      String endDate = DateFormat.format("yyyy-MM-dd", today).toString();
+      String startDate = DateFormat.format("yyyy-MM-dd", firstDay).toString();
+
+      String url = "https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.historicaldata%20where%20" +
+              "symbol%20=%20%22" +
+              symbol +
+              "%22%20and%20" +
+              "startDate%20=%20%22" +
+              startDate +
+              "%22%20" +
+              "and%20" +
+              "endDate%20=%20%22" +
+              endDate +
+              "%22&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
 
       // Create the request to OpenWeatherMap, and open the connection
       urlConnection = (HttpURLConnection) new URL(url).openConnection();
@@ -53,7 +86,7 @@ public class StockHistoricalTask extends AsyncTask<String, Void, Boolean>{
       StringBuffer buffer = new StringBuffer();
       if (inputStream == null) {
         // Nothing to do.
-        return null;
+        return false;
       }
       reader = new BufferedReader(new InputStreamReader(inputStream));
 
@@ -67,14 +100,14 @@ public class StockHistoricalTask extends AsyncTask<String, Void, Boolean>{
 
       if (buffer.length() == 0) {
         // Stream was empty.  No point in parsing.
-        return null;
+        return false;
       }
       resultJsonStr = buffer.toString();
+      data = getHistoricalValues(resultJsonStr);
+      return true;
 
-    } catch (IOException e) {
-      Log.e(LOG_TAG, "Error ", e);
-      // If the code didn't successfully get the weather data, there's no point in attempting
-      // to parse it.
+    } catch (IOException | JSONException e) {
+      Log.d(LOG_TAG, "Error ", e);
     } finally {
       if (urlConnection != null) {
         urlConnection.disconnect();
@@ -87,100 +120,29 @@ public class StockHistoricalTask extends AsyncTask<String, Void, Boolean>{
         }
       }
     }
-    return null;
+    return false;
   }
 
   @Override
   protected void onPostExecute(Boolean result) {
+    if(result){
+      listener.onDataRetrieved(data);
+    }else {
+      listener.onDataRetrieved(null);
+    }
     //showDialog("Downloaded " + result + " bytes");
   }
 
-  /*@Override
-  public int onRunTask(TaskParams params){
-    Cursor initQueryCursor;
-    if (mContext == null){
-      mContext = this;
-    }
-    StringBuilder urlStringBuilder = new StringBuilder();
-    try{
-      // Base URL for the Yahoo query
-      urlStringBuilder.append("https://query.yahooapis.com/v1/public/yql?q=");
-      urlStringBuilder.append(URLEncoder.encode("select * from yahoo.finance.quotes where symbol "
-        + "in (", "UTF-8"));
-    } catch (UnsupportedEncodingException e) {
-      e.printStackTrace();
-    }
-    if (params.getTag().equals("init") || params.getTag().equals("periodic")){
-      isUpdate = true;
-      initQueryCursor = mContext.getContentResolver().query(QuoteProvider.Quotes.CONTENT_URI,
-          new String[] { "Distinct " + QuoteColumns.SYMBOL }, null,
-          null, null);
-      if (initQueryCursor.getCount() == 0 || initQueryCursor == null){
-        // Init task. Populates DB with quotes for the symbols seen below
-        try {
-          urlStringBuilder.append(
-              URLEncoder.encode("\"YHOO\",\"AAPL\",\"GOOG\",\"MSFT\")", "UTF-8"));
-        } catch (UnsupportedEncodingException e) {
-          e.printStackTrace();
-        }
-      } else if (initQueryCursor != null){
-        DatabaseUtils.dumpCursor(initQueryCursor);
-        initQueryCursor.moveToFirst();
-        for (int i = 0; i < initQueryCursor.getCount(); i++){
-          mStoredSymbols.append("\""+
-              initQueryCursor.getString(initQueryCursor.getColumnIndex("symbol"))+"\",");
-          initQueryCursor.moveToNext();
-        }
-        mStoredSymbols.replace(mStoredSymbols.length() - 1, mStoredSymbols.length(), ")");
-        try {
-          urlStringBuilder.append(URLEncoder.encode(mStoredSymbols.toString(), "UTF-8"));
-        } catch (UnsupportedEncodingException e) {
-          e.printStackTrace();
-        }
-      }
-    } else if (params.getTag().equals("add")){
-      isUpdate = false;
-      // get symbol from params.getExtra and build query
-      String stockInput = params.getExtras().getString("symbol");
-      try {
-        urlStringBuilder.append(URLEncoder.encode("\""+stockInput+"\")", "UTF-8"));
-      } catch (UnsupportedEncodingException e){
-        e.printStackTrace();
-      }
-    }
-    // finalize the URL for the API query.
-    urlStringBuilder.append("&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables."
-        + "org%2Falltableswithkeys&callback=");
-     String url = "https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.historicaldata%20where%20symbol%20=%20%22YHOO%22%20and%20startDate%20=%20%222009-09-11%22%20and%20endDate%20=%20%222010-03-10%22&format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
+  private ArrayList<String> getHistoricalValues(String moviesJsonStr) throws JSONException {
 
-    String urlString;
-    String getResponse;
-    int result = GcmNetworkManager.RESULT_FAILURE;
+    ArrayList<String> result = new ArrayList<>();
+    JSONArray values = new JSONObject(moviesJsonStr).getJSONObject("query").getJSONObject("results").getJSONArray("quote");
 
-    if (urlStringBuilder != null){
-      urlString = urlStringBuilder.toString();
-      try{
-        getResponse = fetchData(url);
-        result = GcmNetworkManager.RESULT_SUCCESS;
-        try {
-          ContentValues contentValues = new ContentValues();
-          // update ISCURRENT to 0 (false) so new data is current
-          if (isUpdate){
-            contentValues.put(QuoteColumns.ISCURRENT, 0);
-            mContext.getContentResolver().update(QuoteProvider.Quotes.CONTENT_URI, contentValues,
-                null, null);
-          }
-          mContext.getContentResolver().applyBatch(QuoteProvider.AUTHORITY,
-              Utils.quoteJsonToContentVals(getResponse));
-        }catch (RemoteException | OperationApplicationException e){
-          Log.e(LOG_TAG, "Error applying batch insert", e);
-        }
-      } catch (IOException e){
-        e.printStackTrace();
-      }
+    for (int i = 0; i < values.length(); i++) {
+      JSONObject stockValue = values.getJSONObject(i);
+      result.add(stockValue.getString("Close"));
     }
 
     return result;
-  }*/
-
+  }
 }

@@ -1,13 +1,21 @@
 package com.sam_chordas.android.stockhawk.rest;
 
 import android.content.ContentProviderOperation;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Handler;
 import android.util.Log;
+import android.widget.Toast;
+
+import com.sam_chordas.android.stockhawk.MyApp;
 import com.sam_chordas.android.stockhawk.data.QuoteColumns;
 import com.sam_chordas.android.stockhawk.data.QuoteProvider;
-import java.util.ArrayList;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.ArrayList;
 
 /**
  * Created by sam_chordas on 10/8/15.
@@ -15,7 +23,8 @@ import org.json.JSONObject;
 public class Utils {
 
   private static String LOG_TAG = Utils.class.getSimpleName();
-
+  public static final String ACTION_DATA_UPDATED =
+          "com.example.android.sunshine.app.ACTION_DATA_UPDATED";
   public static boolean showPercent = true;
 
   public static ArrayList quoteJsonToContentVals(String JSON){
@@ -30,14 +39,22 @@ public class Utils {
         if (count == 1){
           jsonObject = jsonObject.getJSONObject("results")
               .getJSONObject("quote");
-          batchOperations.add(buildBatchOperation(jsonObject));
+
+          ContentProviderOperation result = buildBatchOperation(jsonObject);
+          if(result!=null) {
+            batchOperations.add(result);
+          }
         } else{
           resultsArray = jsonObject.getJSONObject("results").getJSONArray("quote");
 
           if (resultsArray != null && resultsArray.length() != 0){
             for (int i = 0; i < resultsArray.length(); i++){
               jsonObject = resultsArray.getJSONObject(i);
-              batchOperations.add(buildBatchOperation(jsonObject));
+
+              ContentProviderOperation result = buildBatchOperation(jsonObject);
+              if(result!=null){
+                batchOperations.add(result);
+              }
             }
           }
         }
@@ -49,8 +66,11 @@ public class Utils {
   }
 
   public static String truncateBidPrice(String bidPrice){
-    bidPrice = String.format("%.2f", Float.parseFloat(bidPrice));
-    return bidPrice;
+    if(!bidPrice.equals("") && !bidPrice.equals("null")) {
+      return String.format("%.2f", Float.parseFloat(bidPrice));
+    }else{
+      return null;
+    }
   }
 
   public static String truncateChange(String change, boolean isPercentChange){
@@ -74,9 +94,21 @@ public class Utils {
     ContentProviderOperation.Builder builder = ContentProviderOperation.newInsert(
         QuoteProvider.Quotes.CONTENT_URI);
     try {
+      String bidPrice = truncateBidPrice(jsonObject.getString("Bid"));
+      if(bidPrice == null){
+        Handler mainHandler = new Handler(MyApp.getContext().getMainLooper());
+
+        Runnable myRunnable = new Runnable() {
+          @Override
+          public void run() { Toast.makeText(MyApp.getContext(), "Non-existent stock", Toast.LENGTH_SHORT).show();}
+        };
+        mainHandler.post(myRunnable);
+
+        return null;
+      }
       String change = jsonObject.getString("Change");
       builder.withValue(QuoteColumns.SYMBOL, jsonObject.getString("symbol"));
-      builder.withValue(QuoteColumns.BIDPRICE, truncateBidPrice(jsonObject.getString("Bid")));
+      builder.withValue(QuoteColumns.BIDPRICE, bidPrice);
       builder.withValue(QuoteColumns.PERCENT_CHANGE, truncateChange(
           jsonObject.getString("ChangeinPercent"), true));
       builder.withValue(QuoteColumns.CHANGE, truncateChange(change, false));
@@ -91,5 +123,11 @@ public class Utils {
       e.printStackTrace();
     }
     return builder.build();
+  }
+
+  public static void updateWidgets(Context context) {
+    Intent dataUpdatedIntent = new Intent(ACTION_DATA_UPDATED)
+            .setPackage(context.getPackageName());
+    context.sendBroadcast(dataUpdatedIntent);
   }
 }

@@ -8,6 +8,22 @@
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
+    android:background="@android:color/background_light"
     tools:context="com.sam_chordas.android.stockhawk.ui.StockDetails">
+
+    <com.github.mikephil.charting.charts.LineChart
+        android:layout_below="@id/title"
+        android:id="@+id/linechart"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:textColor="@android:color/holo_blue_dark"
+        android:text=""
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:id="@+id/title" />
 
 </RelativeLayout>
