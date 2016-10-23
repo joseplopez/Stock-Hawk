@@ -24,30 +24,23 @@ import com.sam_chordas.android.stockhawk.ui.StockDetails;
 public class WidgetBroadcast extends AppWidgetProvider {
 
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-
         for (int appWidgetId : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.layout_widget);
-
             Intent intent = new Intent(context, MyStocksActivity.class);
             PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, 0);
             views.setOnClickPendingIntent(R.id.widget, pendingIntent);
-
             // Set up the collection
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
                 setRemoteAdapter(context, views);
             } else {
                 setRemoteAdapterV11(context, views);
             }
-
             Intent clickIntentTemplate = new Intent(context, StockDetails.class);
-
             PendingIntent clickPendingIntentTemplate = TaskStackBuilder.create(context)
                     .addNextIntentWithParentStack(clickIntentTemplate)
                     .getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
             views.setPendingIntentTemplate(R.id.widget_list, clickPendingIntentTemplate);
-
             views.setEmptyView(R.id.widget_list, R.id.widget_empty);
-
             appWidgetManager.updateAppWidget(appWidgetId, views);
         }
     }

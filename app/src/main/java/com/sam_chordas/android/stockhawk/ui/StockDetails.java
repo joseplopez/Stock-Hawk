@@ -84,11 +84,6 @@ public class StockDetails extends AppCompatActivity {
         // create a dataset and give it a type
         set1 = new LineDataSet(yVals, getString(R.string.stock_description_chart));
         set1.setFillAlpha(110);
-        // set1.setFillColor(Color.RED);
-
-        // set the line to be drawn like this "- - - - - -"
-        // set1.enableDashedLine(10f, 5f, 0f);
-        // set1.enableDashedHighlightLine(10f, 5f, 0f);
         set1.setColor(Color.BLACK);
         set1.setCircleColor(Color.BLACK);
         set1.setLineWidth(1f);
